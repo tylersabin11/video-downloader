@@ -1,41 +1,70 @@
 const play = require("play-dl");
+const { execSync } = require("child_process");
 
 exports.getVideoData = async (url) => {
-  if (!url) throw new Error("Missing video URL");
-
-  const isYoutube = play.yt_validate(url) === "video";
-  const isTiktok = url.includes("tiktok.com");
-
-  // ⛔ Block TikTok for now to prevent crash
-  if (isTiktok) {
-    throw new Error("TikTok support is temporarily disabled.");
-  }
-
-  if (!isYoutube) {
-    throw new Error("Only YouTube is supported at this time.");
-  }
-
   try {
-    const info = await play.video_basic_info(url);
+    const cleanUrl = url.split("&")[0];
+
+    if (!play.yt_validate(cleanUrl)) {
+      throw new Error("Invalid YouTube URL");
+    }
+
+    const info = await play.video_info(cleanUrl);
     const title = info.video_details.title;
-    const thumbnail = info.video_details.thumbnails?.at(-1)?.url;
+    const thumbnail = info.video_details.thumbnails?.at(-1)?.url || "";
 
-    const stream = await play.stream(url);
-    const streamUrl = stream?.url;
+    const raw = execSync(`yt-dlp -j --no-warnings "${cleanUrl}"`).toString();
+    const data = JSON.parse(raw);
 
-    if (!streamUrl) throw new Error("No stream URL found");
+    const allowedHeights = {
+      144: "144p",
+      360: "360p",
+      480: "480p",
+      720: "720p",
+      1080: "1080p",
+      1440: "2K",
+      2160: "4K",
+    };
+
+    const deduped = {};
+
+    (data.formats || []).forEach(f => {
+      const height = f.height;
+      const label = allowedHeights[height];
+      if (!label || f.ext !== "mp4" || !f.vcodec || !f.url) return;
+
+      const sizeMB = f.filesize ? (f.filesize / 1048576).toFixed(1) : null;
+
+      // Pro if 1080p+, or if format_note indicates high quality
+      const premium = height >= 1080 || ["1080p", "2K", "4K", "1440p", "2160p"].includes(f.format_note);
+
+      if (
+        !deduped[label] ||
+        (sizeMB && !deduped[label].sizeMB) ||
+        (sizeMB && deduped[label].sizeMB && parseFloat(sizeMB) < parseFloat(deduped[label].sizeMB))
+      ) {
+        deduped[label] = {
+          quality: label,
+          url: f.url,
+          sizeMB,
+          premium,
+        };
+      }
+    });
+
+    const formats = Object.values(deduped).sort((a, b) => {
+      const order = ["144p", "360p", "480p", "720p", "1080p", "2K", "4K"];
+      return order.indexOf(a.quality) - order.indexOf(b.quality);
+    });
+
+    if (formats.length === 0) {
+      throw new Error("No usable video formats found.");
+    }
 
     return {
       title,
-      previewImage: thumbnail,
-      playableUrl: streamUrl,
-      formats: [
-        { quality: "480p", url: streamUrl, premium: false },
-        { quality: "720p", url: streamUrl, premium: false },
-        { quality: "1080p", url: streamUrl, premium: true },
-        { quality: "1440p", url: streamUrl, premium: true },
-        { quality: "4K", url: streamUrl, premium: true },
-      ],
+      thumbnail,
+      formats,
     };
   } catch (err) {
     console.error("❌ Stream or info fetch failed:", err.message);

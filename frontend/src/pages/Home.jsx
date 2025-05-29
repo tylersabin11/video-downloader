@@ -99,28 +99,53 @@ export default function Home() {
         {/* Video Display */}
         {videoData && (
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mt-6 space-y-4">
-            <h2 className="text-xl font-bold text-black">{videoData.title}</h2>
-            <img src={videoData.previewImage} alt="Preview" className="rounded" />
-            <video src={videoData.playableUrl} controls className="w-full rounded" />
+            <h2 className="text-xl font-bold text-black text-center">{videoData.title}</h2>
 
+            {/* Playable Thumbnail */}
+            {videoData.thumbnail && (
+              <div
+                className="relative group cursor-pointer"
+                onClick={() => window.open(videoData.formats[0].url, "_blank")}
+              >
+                <img
+                  src={videoData.thumbnail}
+                  alt="Preview"
+                  className="w-full rounded-md shadow"
+                />
+                <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-16 w-16 text-white"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </div>
+              </div>
+            )}
+
+            {/* Download Options */}
             <div>
               <h3 className="font-bold mb-2 text-black">Download Options:</h3>
               <ul className="space-y-2">
-                {videoData.formats.map((format, index) => (
-                  <li key={index}>
-                    <span className="font-semibold text-black">{format.quality}:</span>{" "}
-                    {format.premium ? (
-                      <span className="text-red-500">Pro Only</span>
-                    ) : (
-                      <a
-                        href={`http://localhost:5000/api/videos/download?url=${encodeURIComponent(format.url)}&title=${encodeURIComponent(videoData.title)}`}
-                        className="text-blue-600 underline"
-                      >
-                        Download
-                      </a>
-                    )}
-                  </li>
-                ))}
+              {videoData.formats.map((format, index) => (
+                <li key={index}>
+                  <span className="font-semibold text-black">
+                    {format.quality} {format.sizeMB ? `(${format.sizeMB} MB)` : ""}:
+                  </span>{" "}
+                  {format.premium ? (
+                    <span className="text-red-500">Pro Only🔒</span>
+                  ) : (
+                    <a
+                      href={`http://localhost:5000/api/videos/download?url=${encodeURIComponent(format.url)}&title=${encodeURIComponent(videoData.title)}`}
+                      className="text-blue-600 underline"
+                    >
+                      Download
+                    </a>
+                  )}
+                </li>
+              ))}
               </ul>
               <p className="text-xs text-gray-500 mt-2">
                 If the download doesn’t start, right-click and choose “Save link as.”
